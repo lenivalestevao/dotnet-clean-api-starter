@@ -1,0 +1,43 @@
+using System.Net;
+using System.Text.Json;
+
+namespace DotnetCleanApiStarter.Middleware;
+
+/// <summary>
+/// Catches unhandled exceptions and converts them into a consistent JSON error response,
+/// instead of leaking stack traces or returning an empty 500.
+/// </summary>
+public class ExceptionHandlingMiddleware
+{
+private readonly RequestDelegate _next;
+private readonly ILogger<ExceptionHandlingMiddleware> _logger;
+
+public ExceptionHandlingMiddleware(RequestDelegate next, ILogger<ExceptionHandlingMiddleware> logger)
+{
+_next = next;
+_logger = logger;
+}
+
+public async Task InvokeAsync(HttpContext context)
+{
+  try
+{
+await _next(context);
+}
+    catch (Exception ex)
+{
+_logger.LogError(ex, "Unhandled exception while processing {Path}", context.Request.Path);
+
+context.Response.ContentType = "application/json";
+context.Response.StatusCode = (int)HttpStatusCode.InternalServerError;
+
+var payload = JsonSerializer.Serialize(new
+{
+error = "An unexpected error occurred.",
+traceId = context.TraceIdentifier
+});
+
+await context.Response.WriteAsync(payload);
+}
+}
+}
